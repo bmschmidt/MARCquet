@@ -8,9 +8,7 @@ from pyarrow import json as pajson
 from pyarrow import compute as pc
 from pyarrow import parquet
 import polars as pl
-import pymarc
-
-schema = json.load(Path("marc-schema.json").expanduser().open())
+from .arrow_schema import jsonschema
 
 def parse_sub(val, field_name):
     sub = defaultdict(list)
@@ -23,9 +21,9 @@ def parse_sub(val, field_name):
             sub[subname].append(subval)
         else:
             sub[subname] = subval
-    for ind in 'ind1', 'ind2':
+    for ind, fullname in ('ind1', 'indicator1'), ('ind2', 'indicator2'):
         try:
-            sub[ind] = val[ind]
+            sub[fullname] = val[ind]
         except KeyError:
             pass
     return sub
@@ -34,7 +32,6 @@ def to_parquet(iterator, filename):
     with open("/tmp/f.json", "w") as fout:
         for i, d in enumerate(iterator):
             r = parse_dict_marc(d)
-
             fout.write(json.dumps(r) + "\n")
             if i % 100 == 0:
                 print(i, end="\r")
@@ -43,16 +40,16 @@ def to_parquet(iterator, filename):
                         compression = "zstd", compression_level = 10)
     Path("/tmp/f.json").unlink()
 
-
+schema = jsonschema()
 def parse_dict_marc(record):
     d = record
     r = defaultdict(list)
-    r['leader'] = d['leader']
+    r['LDR'] = d['leader']
     for field_pair in d['fields']:
         if len(field_pair) > 1:
             print(field_pair)
-            raise IndexError("HUH")
-        field_name, val = [*field_pair.items()][0]  
+            raise IndexError("I thought there should be only one field pair??")
+        field_name, val = [*field_pair.items()][0]
         if isinstance(val, str):
             r[field_name] = val
             continue
@@ -60,3 +57,4 @@ def parse_dict_marc(record):
             r[field_name].append(parse_sub(val, field_name))
         else:
             r[field_name] = parse_sub(val, field_name)
+    return r
